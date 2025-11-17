@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6A0DAD">
+    
+    <!-- iOS PWA support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("./service-worker.js")
+            .catch(err => console.error("SW registration failed:", err));
+        });
+      }
+    </script>
+    <meta charset="UTF-8" />
+  <title>Strength Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #05050a;
+      --card-bg: #0a0a15;
+      --border: #1f1f2b;
+      --text: #e5e7eb;
+      --text-muted: #9ca3af;
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent-soft: #a78bfa;
+      --danger: #f97373;
+      --success: #4ade80;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 1rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: radial-gradient(circle at top, #111827 0, var(--bg) 45%);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 720px;
+      margin: 0 auto 5rem auto; /* leave room for floating timer */
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      margin: 0.25rem 0 0.25rem;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    .top-card {
+      background: rgba(10, 10, 21, 0.95);
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      padding: 0.85rem 1rem 1rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+    }
+
+    select,
+    input,
+    textarea,
+    button {
+      font-size: 0.9rem;
+      font-family: inherit;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+      background: #020617;
+      color: var(--text);
+      padding: 0.55rem 0.65rem;
+      width: 100%;
+    }
+
+    select:focus,
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent-soft);
+      box-shadow: 0 0 0 1px var(--accent-soft);
+    }
+
+    button {
+      border: none;
+      background: var(--accent);
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s ease, transform 0.05s ease;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .day-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-end;
+    }
+
+    .day-row > div {
+      flex: 1;
+    }
+
+    .day-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--accent-soft);
+      background: rgba(124, 58, 237, 0.12);
+      border: 1px solid rgba(124, 58, 237, 0.35);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: #020617;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      gap: 0.25rem;
+    }
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    .exercises {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .card {
+      background: rgba(10, 10, 21, 0.96);
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.65rem 0.8rem;
+      cursor: pointer;
+    }
+
+    .card-header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .card-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .chevron {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .card-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.25s ease;
+      padding: 0 0.8rem;
+    }
+
+    .card-body-inner {
+      padding: 0.1rem 0 0.7rem;
+      border-top: 1px solid rgba(31, 41, 55, 0.7);
+      margin-top: 0.45rem;
+    }
+
+    .row-tight {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 0.45rem;
+    }
+
+    .row-tight strong {
+      color: var(--text);
+    }
+
+    .capsule {
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+      border: 1px solid rgba(31, 41, 55, 0.8);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .capsule span {
+      font-size: 0.75rem;
+    }
+
+    .capsule-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .cues-short {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin: 0.35rem 0;
+    }
+
+    .cues-short ul {
+      padding-left: 1.1rem;
+      margin: 0.2rem 0 0;
+    }
+
+    .cues-short li {
+      margin-bottom: 0.05rem;
+    }
+
+    .cues-toggle {
+      font-size: 0.78rem;
+      color: var(--accent-soft);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-bottom: 0.2rem;
+      margin-top: 0.2rem;
+    }
+
+    .cues-detailed {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+      display: none;
+      white-space: pre-line;
+    }
+
+    .set-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.25rem;
+      font-size: 0.78rem;
+    }
+
+    .set-table th,
+    .set-table td {
+      padding: 0.15rem 0.2rem;
+      text-align: left;
+    }
+
+    .set-table th {
+      color: var(--text-muted);
+      font-weight: 500;
+      border-bottom: 1px solid rgba(31, 41, 55, 0.8);
+    }
+
+    .set-table td input {
+      font-size: 0.78rem;
+      padding: 0.3rem 0.35rem;
+    }
+
+    .set-table button {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.45rem;
+      width: auto;
+      white-space: nowrap;
+    }
+
+    .set-status {
+      font-size: 0.7rem;
+      margin-top: 0.1rem;
+      min-height: 0.9rem;
+    }
+
+    .set-status.ok {
+      color: var(--success);
+    }
+
+    .set-status.error {
+      color: var(--danger);
+    }
+
+    .small-text {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
+    /* Floating Timer Button */
+    .timer-fab {
+      position: fixed;
+      right: 1.1rem;
+      bottom: 1.1rem;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 0, #a78bfa 0, var(--accent) 55%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f9fafb;
+      font-size: 0.75rem;
+      font-weight: 600;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.65);
+      cursor: pointer;
+      z-index: 40;
+      border: 1px solid rgba(167, 139, 250, 0.5);
+    }
+
+    .timer-fab span {
+      text-align: center;
+      line-height: 1.1;
+    }
+
+    /* Timer Modal */
+    .timer-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+
+    .timer-modal {
+      background: #020617;
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      width: min(420px, 100% - 2.5rem);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.8);
+    }
+
+    .timer-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .timer-modal-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .timer-close {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      background: #020617;
+    }
+
+    .timer-display {
+      font-size: 2.2rem;
+      text-align: center;
+      font-weight: 700;
+      margin: 0.4rem 0 0.5rem;
+      letter-spacing: 0.08em;
+    }
+
+    .timer-pills {
+      display: flex;
+      gap: 0.45rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .timer-pills button {
+      flex: 1;
+      padding: 0.35rem 0.4rem;
+      font-size: 0.8rem;
+      background: #020617;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .timer-pills button.active {
+      border-color: var(--accent-soft);
+      color: var(--accent-soft);
+      background: rgba(124, 58, 237, 0.13);
+    }
+
+    .timer-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .timer-controls button {
+      flex: 1;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.85rem;
+    }
+
+    .timer-note {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    @media (max-width: 480px) {
+      .top-card {
+        padding: 0.7rem 0.8rem 0.85rem;
+      }
+      .card-header {
+        padding: 0.6rem 0.7rem;
+      }
+      .card-body {
+        padding: 0 0.7rem;
+      }
+      .timer-modal {
+        padding: 0.9rem 0.9rem 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Strength Tracker</h1>
+    <div class="subtitle">
+      Choose your day, open each exercise, log sets, and keep rest tight.
+    </div>
+
+    <div class="top-card">
+      <div class="day-row">
+        <div>
+          <label for="daySelect">Day</label>
+          <select id="daySelect"></select>
+        </div>
+        <div style="flex: 0 0 auto;">
+          <div class="day-tag">
+            <span class="pill-dot"></span>
+            <span id="todayLabel">Today</span>
+          </div>
+        </div>
+      </div>
+      <div class="hint">
+        Only the day is a dropdown. Exercises + sets load automatically. Enter just weight, reps, and notes.
+      </div>
+      <div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.4rem;">
+        <div class="pill">
+          <div class="pill-dot"></div>
+          <span>Goal: lean, dense, vascular</span>
+        </div>
+        <div class="pill">
+          <div class="pill-dot"></div>
+          <span>Upper body priority</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="exercisesContainer" class="exercises"></div>
+
+    <div class="small-text">
+      Each saved set is logged to your Google Sheet. Progression tips are based on your last local session
+      per exercise.
+    </div>
+  </div>
+
+  <!-- Floating Timer Button -->
+  <div class="timer-fab" id="timerFab">
+    <span id="timerFabText">⏱</span>
+  </div>
+
+  <!-- Timer Modal -->
+  <div class="timer-modal-backdrop" id="timerModalBackdrop">
+    <div class="timer-modal">
+      <div class="timer-modal-header">
+        <div class="timer-modal-title">Rest Timer</div>
+        <button class="timer-close" id="timerCloseBtn">✕</button>
+      </div>
+      <div class="timer-display" id="timerDisplay">00:60</div>
+      <div class="timer-pills" id="timerPills">
+        <button data-seconds="30">30s</button>
+        <button data-seconds="60" class="active">60s</button>
+        <button data-seconds="90">90s</button>
+        <button data-seconds="120">120s</button>
+      </div>
+      <div class="timer-controls">
+        <button id="timerStartBtn">Start</button>
+        <button id="timerPauseBtn">Pause</button>
+        <button id="timerResetBtn">Reset</button>
+      </div>
+      <div class="timer-note">
+        Your last chosen rest length is remembered on this device. Use it between sets to stay consistent.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfEvvuQEaWzMyw1D0yw9D5LHXileZVlgoDvI873Q9Et-8p41Lq4voyd5ocF9x0JmND9w/exec';
+
+    // Workout definition with sets & rep ranges
+    const WORKOUTS = {
+      Sunday: [
+        {
+          muscleGroup: 'Back',
+          exercise: 'Pull-Ups',
+          sets: 3,
+          minReps: 4,
+          maxReps: 6,
+          shortCues: [
+            'Full hang at bottom, chest to bar as high as you can.',
+            'Drive elbows down and in, don’t kick or swing.',
+            'Keep ribs down and core braced throughout.'
+          ],
+          detailedCues: `Use a shoulder-width grip. Start from a dead hang with straight arms.
+Pull by driving your elbows toward your ribs, not by yanking with your biceps.
+Lean slightly back at the top so your chest leads. Avoid half-reps; aim for controlled full range.
+If bodyweight is too hard, use an assist machine or band.`
+        },
+        {
+          muscleGroup: 'Back',
+          exercise: 'Straight-Arm Cable Pulldown',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Soft bend in elbows, arms straight but not locked.',
+            'Hips hinged slightly, pull bar to top of thighs.',
+            'Think “drive elbows toward pockets.”'
+          ],
+          detailedCues: `Stand with feet hip-width, slight forward lean from the hips.
+Grab the bar with straight arms and a shoulder-width grip.
+Trace a wide arc downwards keeping elbows fixed, finishing at your upper thighs.
+Squeeze lats at the bottom; control the return up without letting shoulders shrug.`
+        },
+        {
+          muscleGroup: 'Forearms',
+          exercise: 'Cable Reverse Curl',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Overhand grip, knuckles up.',
+            'Keep wrists straight, don’t bend them.',
+            'Elbows pinned to your sides, slow negative.'
+          ],
+          detailedCues: `Use a straight or EZ bar attachment with an overhand (pronated) grip.
+Stand tall, elbows glued by your ribs. Curl by lifting your knuckles toward your shoulders.
+Pause briefly at the top to feel the top of the forearm burn.
+Control the lowering phase for 2–3 seconds; avoid swinging or using your back.`
+        },
+        {
+          muscleGroup: 'Core',
+          exercise: 'Medicine Ball Crunch',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Low back stays in contact with the ground.',
+            'Exhale as you crunch up, ribs toward pelvis.',
+            'Move slow, don’t yank your neck.'
+          ],
+          detailedCues: `Lie on your back, knees bent, feet planted.
+Hold the med ball against your chest or slightly in front.
+Curl your upper back off the floor, focusing on bringing your ribcage toward your pelvis.
+Control the way down, keeping constant tension—never fully relax at the bottom.`
+        },
+        {
+          muscleGroup: 'Core',
+          exercise: 'Cable Crunch',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Kneel, hips fixed above knees.',
+            'Pull elbows toward thighs, not hands to floor.',
+            'Think “ribcage to pelvis,” not “head to floor.”'
+          ],
+          detailedCues: `Set a rope on the high pulley, kneel facing the stack.
+Hold the rope by your temples or just above your forehead.
+Round your upper back and crunch forward, bringing your ribs toward your hips.
+Avoid pulling with your arms; let abs generate the movement.
+Control the return, stopping before tension fully drops.`
+        },
+        {
+          muscleGroup: 'Core',
+          exercise: 'Reverse Crunch',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Lower back pressed into the bench or floor.',
+            'Lift hips gently, don’t swing legs.',
+            'Slow down the lowering phase.'
+          ],
+          detailedCues: `Lie on your back, hands lightly behind you or holding a bench.
+Bring knees toward your chest, then tilt your pelvis to lift your hips slightly off the surface.
+Avoid swinging; think about curling your spine instead of kicking up.
+Lower slowly until heels are close to the floor while keeping abs tight.`
+        }
+      ],
+      Monday: [
+        {
+          muscleGroup: 'Shoulders',
+          exercise: 'Seated DB Shoulder Press',
+          sets: 4,
+          minReps: 6,
+          maxReps: 8,
+          shortCues: [
+            'Elbows slightly in front of shoulders, not straight out to the sides.',
+            'Press up in a slight arc over your head, not forward.',
+            'Don’t slam elbows at lockout—keep tension.'
+          ],
+          detailedCues: `Set the bench to about 75–85°.
+Sit tall, core tight, dumbbells at about chin/ear level with palms facing slightly forward.
+Press up while keeping elbows just ahead of your torso, not flared wide.
+At the top, avoid overextending your low back—keep ribs down.
+Lower under control for 2–3 seconds to protect shoulders and build density.`
+        },
+        {
+          muscleGroup: 'Shoulders',
+          exercise: 'DB Lateral Raise',
+          sets: 4,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Shoulders down, don’t shrug.',
+            'Lead with elbows, pinkies slightly up.',
+            'Raise to shoulder height, slow down.'
+          ],
+          detailedCues: `Stand tall with a small bend in your knees.
+Hold dumbbells by your sides, palms facing your thighs.
+Pull your shoulders down away from your ears, then raise arms out to the sides.
+Lead with elbows, keeping a soft bend, and stop around shoulder height.
+Slightly tilt thumbs down/pinkies up, but don’t overdo it.
+Control the way down and avoid swinging or using momentum.`
+        },
+        {
+          muscleGroup: 'Rear Delts',
+          exercise: 'Rear Delt Fly Machine',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Chest tall against pad.',
+            'Drive elbows out and slightly back.',
+            'Squeeze between shoulder blades gently, don’t shrug.'
+          ],
+          detailedCues: `Adjust the seat so handles are at shoulder height.
+Sit facing the pad, chest firmly against it.
+With a slight bend in your elbows, open your arms in an arc, focusing on your rear shoulders.
+Avoid yanking; move smoothly and pause briefly at full contraction.
+Keep traps relaxed as much as possible to target rear delts.`
+        },
+        {
+          muscleGroup: 'Biceps',
+          exercise: 'Standing Barbell Curl',
+          sets: 3,
+          minReps: 8,
+          maxReps: 10,
+          shortCues: [
+            'Elbows pinned by your sides.',
+            'Curl to about chest level, no swinging.',
+            'Lower slowly for control.'
+          ],
+          detailedCues: `Use a shoulder-width underhand grip.
+Stand tall, glutes and abs engaged, elbows tucked close to your ribs.
+Curl the bar up under control, keeping shoulders relaxed.
+Stop when forearms are just past perpendicular, then lower for 2–3 seconds.
+Avoid leaning back or heaving the bar; keep the rep strict.`
+        },
+        {
+          muscleGroup: 'Biceps',
+          exercise: 'Incline DB Curl',
+          sets: 3,
+          minReps: 10,
+          maxReps: 12,
+          shortCues: [
+            'Elbows drift slightly behind your body.',
+            'Full stretch at bottom, feel the long head.',
+            'Curl without letting shoulders roll forward.'
+          ],
+          detailedCues: `Set the bench around 55–65°.
+Let your arms hang straight down with dumbbells in a supinated (palms-up) position.
+From a full stretch, curl the weights up while keeping elbows behind your torso.
+Do not swing or let shoulders hunch forward.
+Lower until you feel a deep stretch, then repeat with control.`
+        },
+        {
+          muscleGroup: 'Triceps',
+          exercise: 'Rope Pushdown',
+          sets: 3,
+          minReps: 10,
+          maxReps: 12,
+          shortCues: [
+            'Elbows glued to your sides.',
+            'Separate the rope at the bottom.',
+            'Stop just before locking out hard.'
+          ],
+          detailedCues: `Stand close to the cable stack, slight forward lean.
+Grab the rope with a neutral grip and tuck your elbows to your ribs.
+Push the rope straight down, then spread the ends apart at the bottom.
+Squeeze your triceps for a brief pause, then return with elbows fixed.
+Avoid swinging your torso or letting shoulders roll forward.`
+        },
+        {
+          muscleGroup: 'Triceps',
+          exercise: 'Overhead DB Extension',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Elbows pointed up, close to your head.',
+            'Lower behind head with full stretch.',
+            'Press up without flaring elbows wide.'
+          ],
+          detailedCues: `Sit on a bench, hold one dumbbell with both hands under the top plate.
+Raise it overhead with elbows pointing mostly upward.
+Lower the weight behind your head in a controlled arc until you feel a strong stretch.
+Keep elbows from drifting out wide.
+Press the weight back up, stopping just short of fully slamming your elbows straight.`
+        },
+        {
+          muscleGroup: 'Forearms',
+          exercise: 'EZ-Bar Reverse Curl',
+          sets: 2,
+          minReps: 15,
+          maxReps: 15,
+          shortCues: [
+            'Shoulder-width overhand grip.',
+            'Wrists neutral, no bending.',
+            'Slow, burning reps—this is for density.'
+          ],
+          detailedCues: `Use the inner curves of an EZ-bar with a shoulder-width overhand grip.
+Stand tall, elbows anchored to your sides.
+Curl the bar toward your upper chest, focusing on the top of your forearms.
+Hold briefly at the top, then lower for 2–3 seconds.
+Choose a weight that lets you feel a deep burn by rep 12–15 without swinging.`
+        }
+      ],
+      Tuesday: [
+        {
+          muscleGroup: 'Chest',
+          exercise: 'Incline DB Press',
+          sets: 4,
+          minReps: 8,
+          maxReps: 10,
+          shortCues: [
+            'Bench around 25–30° (low incline).',
+            'Elbows about 45° from your torso.',
+            'Touch lower chest/upper ribs, press over mid-chest.'
+          ],
+          detailedCues: `Set the bench to a low incline (one or two clicks above flat).
+Hold dumbbells with palms forward, directly over your mid chest.
+Lower in a slight arc until dumbbells reach around lower chest level.
+Press up by driving your elbows under the dumbbells, not by flaring them out.
+Keep your shoulder blades pinched and your feet firmly planted.`
+        },
+        {
+          muscleGroup: 'Chest',
+          exercise: 'Cable or Machine Fly',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Soft bend in elbows, keep it fixed.',
+            'Hug a barrel—don’t clap your hands.',
+            'Squeeze chest at the front, slow stretch back.'
+          ],
+          detailedCues: `Use a moderate weight so you control the movement.
+Set handles at chest height, step forward to create tension.
+With a gentle bend in your elbows, bring your arms together in front of your chest.
+Squeeze and pause briefly, then open slowly until you feel a deep stretch.
+Avoid letting shoulders roll forward or shrug up.`
+        },
+        {
+          muscleGroup: 'Back',
+          exercise: 'Lat Pulldown',
+          sets: 4,
+          minReps: 8,
+          maxReps: 12,
+          shortCues: [
+            'Lean slightly back, chest up.',
+            'Pull bar to upper chest, not behind the neck.',
+            'Drive elbows down and in.'
+          ],
+          detailedCues: `Use a comfortable grip width (a bit wider than shoulders works well).
+Sit with knees snug under the pad and slight backward lean.
+Pull the bar to your upper chest while keeping your chest lifted.
+Think about pulling with your elbows rather than your hands.
+Control the return up without letting the weight stack slam.`
+        },
+        {
+          muscleGroup: 'Back',
+          exercise: 'Chest-Supported Row',
+          sets: 3,
+          minReps: 8,
+          maxReps: 10,
+          shortCues: [
+            'Chest lightly against pad, spine neutral.',
+            'Pull elbows toward your hips.',
+            'Squeeze shoulder blades without shrugging.'
+          ],
+          detailedCues: `Set the bench so your chest rests comfortably on the pad.
+Grab the handles or dumbbells with a neutral or overhand grip.
+Row by pulling elbows toward your back pockets.
+Pause briefly at the top to feel mid-back engagement.
+Lower slowly under control and avoid bouncing off the pad.`
+        },
+        {
+          muscleGroup: 'Back',
+          exercise: 'Straight-Arm Cable Pulldown (Tuesday)',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Same as Sunday: arms straight, pull to thighs.',
+            'Focus on lats, not biceps.',
+            'Smooth, controlled arc every rep.'
+          ],
+          detailedCues: `Form is identical to your Sunday version.
+Use this as a pump/set finisher: moderate weight, high control.
+Focus on lat squeeze and breathing, not ego loading.`
+        },
+        {
+          muscleGroup: 'Biceps',
+          exercise: 'Hammer Curl',
+          sets: 2,
+          minReps: 12,
+          maxReps: 12,
+          shortCues: [
+            'Neutral grip (thumbs up).',
+            'Elbows by your sides, no swinging.',
+            'Curl across body slightly for more brachialis.'
+          ],
+          detailedCues: `Stand tall with dumbbells at your sides in a neutral grip.
+Curl one or both at a time, keeping elbows tight to your torso.
+You can slightly angle the curl across toward your opposite chest for more brachialis.
+Control the lowering phase and avoid letting weights bang at the bottom.`
+        },
+        {
+          muscleGroup: 'Triceps',
+          exercise: 'Bench Dips',
+          sets: 2,
+          minReps: 15,
+          maxReps: 15,
+          shortCues: [
+            'Hands just outside hips on bench.',
+            'Lower until elbows about 90°.',
+            'Keep shoulders away from ears.'
+          ],
+          detailedCues: `Place your hands on the edge of a bench with fingers forward, feet on the floor.
+Lower your body by bending elbows, keeping them from flaring excessively.
+Stop when your upper arms are parallel to the floor or slightly deeper if shoulders tolerate it.
+Press back up by driving through your palms.
+Avoid rolling shoulders forward or dropping your chest excessively.`
+        }
+      ],
+      Thursday: [
+        {
+          muscleGroup: 'Shoulders',
+          exercise: 'Standing Lateral Raise (Volume)',
+          sets: 5,
+          minReps: 15,
+          maxReps: 15,
+          shortCues: [
+            'Lighter weight, big pump focus.',
+            'Shoulders down, elbows lead.',
+            'Minimal body swing—high control.'
+          ],
+          detailedCues: `Same mechanics as Monday’s lateral raise but with lighter weight and higher reps.
+Treat this as a shape/pump movement; keep tension from start to finish.
+Avoid resting at the bottom; think "constant tension" and smooth motion.`
+        },
+        {
+          muscleGroup: 'Shoulders',
+          exercise: 'DB Front Raise',
+          sets: 3,
+          minReps: 12,
+          maxReps: 12,
+          shortCues: [
+            'Raise in front to shoulder height.',
+            'Palms down or neutral, no swinging.',
+            'Don’t go above eye level.'
+          ],
+          detailedCues: `Hold dumbbells in front of your thighs.
+Raise one or both to about shoulder height in front of you.
+Keep a small bend in your elbows and control the movement both up and down.
+Avoid leaning back or using leg momentum.`
+        },
+        {
+          muscleGroup: 'Shoulders',
+          exercise: 'Machine Shoulder Press (Light)',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Seat so handles are around chin level.',
+            'Press up without locking hard.',
+            'Use this for controlled volume, not max strength.'
+          ],
+          detailedCues: `Set the seat so that handles line up around your lower to mid cheek.
+Grip the handles, brace your core, and press upward in a controlled motion.
+Avoid arching your lower back; keep it against the pad if there is one.
+Use a moderate weight, focusing on pump and time under tension.`
+        },
+        {
+          muscleGroup: 'Biceps',
+          exercise: 'Cable Curl (Pump)',
+          sets: 4,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Elbows pinned, chest tall.',
+            'Squeeze at the top for 1s.',
+            'Slow lowering phase every rep.'
+          ],
+          detailedCues: `Attach a straight bar or EZ bar to a low pulley.
+Stand tall with elbows kept by your sides.
+Curl the bar up, focusing on bringing your pinkies toward your shoulders.
+Pause and squeeze at the top, then lower under control.
+Use this as a high-tension pump set; don’t overload the stack.`
+        },
+        {
+          muscleGroup: 'Triceps',
+          exercise: 'Rope Pushdown (Pump)',
+          sets: 4,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Same as Monday but lighter, more volume.',
+            'Keep constant tension—no bouncing.',
+            'Spread the rope hard at the bottom.'
+          ],
+          detailedCues: `Use the same technique as Monday’s rope pushdown.
+Choose a weight that lets you get a deep burn with clean form.
+Keep rest short and tension high to chase a pump rather than max load.`
+        },
+        {
+          muscleGroup: 'Forearms',
+          exercise: 'EZ-Bar Reverse Curl (Thursday)',
+          sets: 2,
+          minReps: 15,
+          maxReps: 15,
+          shortCues: [
+            'Same grip, high-rep burner.',
+            'Focus on top of forearm working.',
+            'No body swing—just forearm work.'
+          ],
+          detailedCues: `Identical form to Monday’s EZ-bar reverse curl.
+This is a finisher: lighter weight, more control, and focus on burn.
+Keep rest very short between sets.`
+        },
+        {
+          muscleGroup: 'Triceps',
+          exercise: 'Tricep Kickback',
+          sets: 2,
+          minReps: 15,
+          maxReps: 15,
+          shortCues: [
+            'Torso hinged, upper arm parallel to floor.',
+            'Straighten elbow fully, squeeze hard.',
+            'Control back into the 90° bend.'
+          ],
+          detailedCues: `Support one hand on a bench, hinge at the hips.
+Hold a dumbbell in the other hand with your upper arm parallel to the floor.
+Extend your elbow until your arm is straight and in line with your torso.
+Pause briefly, then bend the elbow back to 90° under control.
+Use light to moderate weights; this is a detail movement.`
+        }
+      ],
+      Friday: [
+        {
+          muscleGroup: 'Chest',
+          exercise: 'Bench Press or DB Bench',
+          sets: 4,
+          minReps: 5,
+          maxReps: 6,
+          shortCues: [
+            'Feet planted, slight arch, shoulder blades pinched.',
+            'Bar/dumbbells over mid chest, not neck.',
+            'Controlled lower, powerful but tight press.'
+          ],
+          detailedCues: `Lie on the bench with feet flat and a small natural arch in your lower back.
+Retract your shoulder blades and keep them pinned.
+Lower the bar or dumbbells to around mid-chest, elbows around 45° from your torso.
+Press up while maintaining shoulder blade position.
+Avoid bouncing the weight or letting shoulders roll forward.`
+        },
+        {
+          muscleGroup: 'Back',
+          exercise: 'Pull-Ups or Lat Pulldown (Power)',
+          sets: 4,
+          minReps: 6,
+          maxReps: 8,
+          shortCues: [
+            'Same as earlier, but focused on strength.',
+            'Lower under control, no half-reps.',
+            'Use assistance if needed to hit rep range.'
+          ],
+          detailedCues: `Use either pull-ups or pulldowns based on equipment and strength.
+Keep your chest tall and drive elbows down and in.
+Choose a load that lets you hit 6–8 tough, clean reps.
+Focus on full range and controlled stretch at the top.`
+        },
+        {
+          muscleGroup: 'Back',
+          exercise: 'DB Row',
+          sets: 3,
+          minReps: 8,
+          maxReps: 10,
+          shortCues: [
+            'One knee/hand on bench, flat back.',
+            'Row toward hip, not chest.',
+            'Squeeze at the top, no jerking.'
+          ],
+          detailedCues: `Place one knee and same-side hand on a bench, opposite foot on the floor.
+Hold a dumbbell in the free hand, arm extended below your shoulder.
+Row by pulling the dumbbell toward your hip/waist, not straight up to your chest.
+Pause briefly at the top, then lower under control.
+Keep your back flat and avoid twisting excessively.`
+        },
+        {
+          muscleGroup: 'Shoulders',
+          exercise: 'Arnold Press',
+          sets: 3,
+          minReps: 8,
+          maxReps: 10,
+          shortCues: [
+            'Start palms facing you, elbows in.',
+            'Rotate palms forward as you press.',
+            'Control the rotation on the way down.'
+          ],
+          detailedCues: `Sit on a bench with a back support.
+Start with dumbbells at chest height, palms facing you and elbows in front.
+As you press up, rotate your palms so they face forward at the top.
+Reverse the motion under control as you lower.
+Use moderate weight; prioritize constant tension and smooth rotation.`
+        },
+        {
+          muscleGroup: 'Biceps',
+          exercise: 'Preacher Curl',
+          sets: 3,
+          minReps: 10,
+          maxReps: 10,
+          shortCues: [
+            'Upper arm fixed on pad.',
+            'Full stretch at bottom, no slamming.',
+            'Slow and strict, squeeze at top.'
+          ],
+          detailedCues: `Set the seat so your armpits rest comfortably at the top of the preacher pad.
+Grip the bar or dumbbell with palms up.
+Curl up while keeping the back of your arm fully in contact with the pad.
+Stop just before the top so you don’t lose tension.
+Lower slowly into a deep stretch without hyperextending your elbows.`
+        },
+        {
+          muscleGroup: 'Triceps',
+          exercise: 'Skull Crushers',
+          sets: 3,
+          minReps: 10,
+          maxReps: 12,
+          shortCues: [
+            'Bar moves toward forehead or slightly behind.',
+            'Elbows stay mostly fixed.',
+            'Control down, extend without flaring wide.'
+          ],
+          detailedCues: `Lie on a flat bench with an EZ-bar or dumbbells.
+Start with arms extended above your shoulders.
+Bend your elbows to lower the weight toward your forehead or just behind it.
+Keep elbows tucked—only your forearms should move.
+Extend back up under control, avoiding elbow pain by not snapping.`
+        }
+      ],
+      Saturday: [
+        {
+          muscleGroup: 'Legs',
+          exercise: 'Leg Press',
+          sets: 4,
+          minReps: 10,
+          maxReps: 12,
+          shortCues: [
+            'Feet around shoulder-width, slightly turned out.',
+            'Lower until knees ~90°, no butt lift.',
+            'Drive through heels, don’t lock knees hard.'
+          ],
+          detailedCues: `Set your feet about shoulder-width with a mild outward angle.
+Lower the sled until your knees are near 90° or slightly deeper if comfortable.
+Keep your lower back pressed into the pad; don’t let your hips roll.
+Press back up by driving through your mid-foot/heels.
+Avoid bouncing at the bottom or slamming into lockout.`
+        },
+        {
+          muscleGroup: 'Legs',
+          exercise: 'Bulgarian Split Squat',
+          sets: 3,
+          minReps: 8,
+          maxReps: 10,
+          shortCues: [
+            'Back foot on bench, front foot far enough forward.',
+            'Drop back knee toward the floor.',
+            'Keep torso tall, front knee tracking over toes.'
+          ],
+          detailedCues: `Place your back foot on a bench behind you, laces down.
+Front foot should be far enough forward that your knee doesn’t jam over your toes.
+Lower under control until your back knee is close to the ground.
+Drive through the front leg, keeping chest up and core braced.
+Use bodyweight or dumbbells depending on skill and comfort.`
+        },
+        {
+          muscleGroup: 'Legs',
+          exercise: 'Hamstring Curl',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Align knee with machine pivot.',
+            'Curl heel toward glutes, no hip lifting.',
+            'Slow negative every rep.'
+          ],
+          detailedCues: `Adjust the pad so it rests just above your heels.
+Align your knee joint with the machine’s axis of rotation.
+Curl your legs toward your glutes, squeezing hamstrings at the top.
+Lower slowly, avoiding letting the weight slam.
+Keep your hips pressed into the pad.`
+        },
+        {
+          muscleGroup: 'Lower Back',
+          exercise: 'Back Extension',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Hips on pad, not stomach.',
+            'Lower until you feel a stretch, then extend to neutral.',
+            'Don’t hyperextend at the top.'
+          ],
+          detailedCues: `Set the pad so your hips rest on the edge, not your stomach.
+Cross your arms or hold a light plate to your chest.
+Lower your torso until you feel a stretch in your hamstrings and lower back.
+Extend back up until your body is in a straight line—avoid leaning back excessively.
+Move slowly and focus on control, not speed.`
+        },
+        {
+          muscleGroup: 'Core / Stability',
+          exercise: 'Bird Dog',
+          sets: 3,
+          minReps: 12,
+          maxReps: 12,
+          shortCues: [
+            'On all fours, spine neutral.',
+            'Opposite arm and leg extend straight.',
+            'Keep hips level, no twisting.'
+          ],
+          detailedCues: `Start on hands and knees with hands under shoulders and knees under hips.
+Extend one arm forward and the opposite leg back.
+Pause briefly, then return to start and switch sides.
+Focus on keeping your torso stable and hips square to the floor.
+Move slowly; this is about control and spinal stability.`
+        },
+        {
+          muscleGroup: 'Glutes',
+          exercise: 'Hip Thrust / Glute Bridge',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Feet about hip-width, shins vertical at top.',
+            'Drive hips up, squeeze glutes hard.',
+            'Avoid overextending low back.'
+          ],
+          detailedCues: `Rest your upper back on a bench or do on the floor for bridges.
+Place your feet so that at the top, your shins are roughly vertical.
+Drive your hips upward by squeezing glutes, not arching your low back.
+Pause at the top, then lower under control until just above the floor.
+Use bodyweight or moderate load; this is for strength and back protection.`
+        },
+        {
+          muscleGroup: 'Legs / Stamina',
+          exercise: 'Walking Lunge',
+          sets: 2,
+          minReps: 20,
+          maxReps: 30,
+          shortCues: [
+            'Long enough stride that front knee stays behind toes.',
+            'Drop back knee toward floor.',
+            'Push through front leg to step through.'
+          ],
+          detailedCues: `Stand tall, step forward into a lunge with a comfortable stride.
+Lower until both knees are around 90°.
+Drive through the front foot to bring your back leg forward into the next step.
+Stay tall through your torso, avoiding twisting.
+Use bodyweight or light dumbbells; this is also a stamina move.`
+        },
+        {
+          muscleGroup: 'Core',
+          exercise: 'Hanging Knee Raise',
+          sets: 3,
+          minReps: 10,
+          maxReps: 12,
+          shortCues: [
+            'Hang from bar, no swinging.',
+            'Drive knees toward chest by curling pelvis.',
+            'Lower slowly to full hang.'
+          ],
+          detailedCues: `Hang from a pull-up bar with a comfortable grip.
+Bring your knees toward your chest by curling your hips, not just lifting thighs.
+Pause briefly at the top, then lower under control.
+Minimize swinging by tightening your core and moving deliberately.`
+        },
+        {
+          muscleGroup: 'Core',
+          exercise: 'Cable Crunch (Saturday)',
+          sets: 3,
+          minReps: 12,
+          maxReps: 15,
+          shortCues: [
+            'Same technique as earlier in week.',
+            'Use moderate load, focus on contraction.',
+            'Breathe out as you crunch.'
+          ],
+          detailedCues: `Same as your earlier cable crunch form.
+Use this as an additional core stimulus with controlled tempo and breathing.`
+        },
+        {
+          muscleGroup: 'Core',
+          exercise: 'Stomach Vacuum',
+          sets: 3,
+          minReps: 20,
+          maxReps: 20,
+          shortCues: [
+            'Exhale, then “pull” belly button toward spine.',
+            'Hold the tension without holding your breath too long.',
+            'Perfect for waist tightening; stay relaxed in shoulders.'
+          ],
+          detailedCues: `Stand or kneel tall. Exhale completely.
+Gently draw your belly button in toward your spine and up under your ribcage.
+Hold the contraction while breathing shallowly if possible.
+Start with shorter holds and build up. This trains your deep core (transverse abdominis) for a tighter waist.`
+        }
+      ]
+    };
+
+    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+    // === DOM ELEMENTS ===
+    const daySelect = document.getElementById('daySelect');
+    const todayLabel = document.getElementById('todayLabel');
+    const exercisesContainer = document.getElementById('exercisesContainer');
+
+    const timerFab = document.getElementById('timerFab');
+    const timerFabText = document.getElementById('timerFabText');
+    const timerModalBackdrop = document.getElementById('timerModalBackdrop');
+    const timerCloseBtn = document.getElementById('timerCloseBtn');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerPills = document.getElementById('timerPills');
+    const timerStartBtn = document.getElementById('timerStartBtn');
+    const timerPauseBtn = document.getElementById('timerPauseBtn');
+    const timerResetBtn = document.getElementById('timerResetBtn');
+
+    // === LOCAL STORAGE KEYS ===
+    const LS_REST_DURATION_KEY = 'sa_rest_duration_seconds';
+    const LS_EXERCISE_HISTORY_KEY = 'sa_exercise_history_v1';
+
+    // === TIMER STATE ===
+    let timerDuration = 60;
+    let timerRemaining = 60;
+    let timerInterval = null;
+    let timerRunning = false;
+
+    function loadRestDuration() {
+      const stored = localStorage.getItem(LS_REST_DURATION_KEY);
+      if (stored) {
+        const val = parseInt(stored, 10);
+        if (!isNaN(val) && val > 0) {
+          timerDuration = val;
+          timerRemaining = val;
+        }
+      }
+    }
+
+    function saveRestDuration(seconds) {
+      localStorage.setItem(LS_REST_DURATION_KEY, String(seconds));
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateTimerDisplay() {
+      timerDisplay.textContent = formatTime(timerRemaining);
+      if (timerRunning) {
+        timerFabText.textContent = `⏱\n${formatTime(timerRemaining)}`;
+      } else {
+        timerFabText.textContent = '⏱';
+      }
+    }
+
+    function openTimerModal() {
+      timerModalBackdrop.style.display = 'flex';
+    }
+
+    function closeTimerModal() {
+      timerModalBackdrop.style.display = 'none';
+    }
+
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerRunning = true;
+      timerInterval = setInterval(() => {
+        timerRemaining--;
+        if (timerRemaining <= 0) {
+          timerRemaining = 0;
+          timerRunning = false;
+          clearInterval(timerInterval);
+          timerInterval = null;
+          if (navigator.vibrate) {
+            navigator.vibrate(300);
+          }
+          alert('Rest over – next set.');
+        }
+        updateTimerDisplay();
+      }, 1000);
+      updateTimerDisplay();
+    }
+
+    function pauseTimer() {
+      timerRunning = false;
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      updateTimerDisplay();
+    }
+
+    function resetTimer() {
+      timerRunning = false;
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      timerRemaining = timerDuration;
+      updateTimerDisplay();
+    }
+
+    function initTimer() {
+      loadRestDuration();
+      // Init pills
+      const pills = timerPills.querySelectorAll('button');
+      pills.forEach(btn => {
+        const sec = Number(btn.dataset.seconds);
+        if (sec === timerDuration) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+        btn.addEventListener('click', () => {
+          pills.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          timerDuration = sec;
+          timerRemaining = sec;
+          saveRestDuration(sec);
+          resetTimer();
+        });
+      });
+      updateTimerDisplay();
+
+      timerFab.addEventListener('click', openTimerModal);
+      timerCloseBtn.addEventListener('click', closeTimerModal);
+      timerStartBtn.addEventListener('click', () => {
+        if (!timerRunning) {
+          if (timerRemaining <= 0) {
+            timerRemaining = timerDuration;
+          }
+          startTimer();
+        }
+      });
+      timerPauseBtn.addEventListener('click', () => {
+        if (timerRunning) {
+          pauseTimer();
+        } else if (timerRemaining > 0 && timerRemaining < timerDuration) {
+          // Resume
+          startTimer();
+        }
+      });
+      timerResetBtn.addEventListener('click', resetTimer);
+    }
+
+    // === EXERCISE HISTORY (LOCAL PROGRESSION) ===
+    function loadExerciseHistory() {
+      const raw = localStorage.getItem(LS_EXERCISE_HISTORY_KEY);
+      if (!raw) return {};
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveExerciseHistory(history) {
+      localStorage.setItem(LS_EXERCISE_HISTORY_KEY, JSON.stringify(history));
+    }
+
+    function buildHistoryKey(exerciseName) {
+      return exerciseName.toLowerCase().replace(/\s+/g, '_');
+    }
+
+    function recordSetToHistory(exerciseName, setNumber, weight, reps) {
+      const history = loadExerciseHistory();
+      const key = buildHistoryKey(exerciseName);
+      const now = new Date().toISOString();
+      if (!history[key]) {
+        history[key] = {
+          lastDate: now,
+          sets: []
+        };
+      }
+      // If a new session, reset sets (simple approach: always overwrite last)
+      history[key].lastDate = now;
+      if (!Array.isArray(history[key].sets)) history[key].sets = [];
+      // Ensure index
+      history[key].sets[setNumber - 1] = { weight, reps };
+      saveExerciseHistory(history);
+    }
+
+    function getExerciseHistory(exerciseName) {
+      const history = loadExerciseHistory();
+      const key = buildHistoryKey(exerciseName);
+      return history[key] || null;
+    }
+
+    function buildRecommendation(history, minReps, maxReps) {
+      if (!history || !Array.isArray(history.sets) || history.sets.length === 0) {
+        return {
+          lastSummary: 'No past data yet – this is your first logged session.',
+          recommendation: 'Use a moderate weight and focus on perfect form. We’ll build targets after today.'
+        };
+      }
+      // Use first non-empty set to determine last working weight
+      let workingWeight = null;
+      let totalReps = 0;
+      let setsCount = 0;
+
+      history.sets.forEach(s => {
+        if (!s) return;
+        const w = Number(s.weight);
+        const r = Number(s.reps);
+        if (!isNaN(w) && !isNaN(r)) {
+          if (workingWeight === null) workingWeight = w;
+          totalReps += r;
+          setsCount++;
+        }
+      });
+
+      if (!setsCount || workingWeight === null) {
+        return {
+          lastSummary: 'Last session: logged but incomplete data.',
+          recommendation: 'Today: focus on logging full sets with clear weight and rep numbers.'
+        };
+      }
+
+      const avgReps = totalReps / setsCount;
+      const lastSummary = `Last session: ${workingWeight} lbs across ${setsCount} set(s), total ${totalReps} rep(s).`;
+
+      let recommendation;
+      if (avgReps >= maxReps - 0.5) {
+        recommendation = `You were near the top of the ${minReps}–${maxReps} rep range. Try adding ~2.5–5 lbs while staying in ${minReps}–${maxReps} reps.`;
+      } else if (avgReps >= minReps) {
+        recommendation = `Solid middle-of-range work. Keep the same weight and aim for +1–2 total reps across all sets.`;
+      } else {
+        recommendation = `Reps were below target. Keep the same or slightly lighter weight and focus on clean reps up toward ${minReps}–${maxReps}.`;
+      }
+
+      return { lastSummary, recommendation };
+    }
+
+    // === RENDERING ===
+    function initDaySelect() {
+      // Populate days
+      DAYS.forEach(day => {
+        const opt = document.createElement('option');
+        opt.value = day;
+        opt.textContent = day;
+        daySelect.appendChild(opt);
+      });
+
+      // Auto-select today
+      const todayIndex = new Date().getDay();
+      const todayName = DAYS[todayIndex];
+      todayLabel.textContent = `Today: ${todayName}`;
+      if (DAYS.includes(todayName)) {
+        daySelect.value = todayName;
+      } else {
+        daySelect.value = 'Monday';
+      }
+
+      daySelect.addEventListener('change', () => {
+        renderDay(daySelect.value);
+      });
+
+      renderDay(daySelect.value);
+    }
+
+    function renderDay(day) {
+      exercisesContainer.innerHTML = '';
+
+      if (day === 'Wednesday') {
+        const restCard = document.createElement('div');
+        restCard.className = 'card';
+        restCard.innerHTML = `
+          <div class="card-header">
+            <div class="card-header-left">
+              <div class="card-title">Rest / Active Recovery</div>
+              <div class="card-subtitle">Light walking, stretching, mobility. Keep diet tight.</div>
+            </div>
+            <div class="chevron">–</div>
+          </div>
+        `;
+        exercisesContainer.appendChild(restCard);
+        return;
+      }
+
+      const workout = WORKOUTS[day];
+      if (!workout || workout.length === 0) {
+        const msg = document.createElement('div');
+        msg.className = 'small-text';
+        msg.textContent = 'No programmed workout for this day.';
+        exercisesContainer.appendChild(msg);
+        return;
+      }
+
+      workout.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const header = document.createElement('div');
+        header.className = 'card-header';
+        header.innerHTML = `
+          <div class="card-header-left">
+            <div class="card-title">${item.exercise}</div>
+            <div class="card-subtitle">${item.muscleGroup} • ${item.sets} set(s) · ${item.minReps}–${item.maxReps} reps</div>
+          </div>
+          <div class="chevron">&#9654;</div>
+        `;
+
+        const body = document.createElement('div');
+        body.className = 'card-body';
+
+        const bodyInner = document.createElement('div');
+        bodyInner.className = 'card-body-inner';
+
+        // History + recommendation
+        const history = getExerciseHistory(item.exercise);
+        const { lastSummary, recommendation } = buildRecommendation(history, item.minReps, item.maxReps);
+
+        const infoRow = document.createElement('div');
+        infoRow.className = 'row-tight';
+        infoRow.innerHTML = `
+          <span class="capsule">
+            <span class="capsule-dot"></span>
+            <span><strong>Last:</strong> ${lastSummary}</span>
+          </span>
+        `;
+
+        const recRow = document.createElement('div');
+        recRow.className = 'row-tight';
+        recRow.innerHTML = `
+          <span class="capsule">
+            <span class="capsule-dot" style="background:var(--accent-soft);"></span>
+            <span><strong>Today:</strong> ${recommendation}</span>
+          </span>
+        `;
+
+        // Cues
+        const cuesShort = document.createElement('div');
+        cuesShort.className = 'cues-short';
+        const shortList = item.shortCues.map(c => `<li>${c}</li>`).join('');
+        cuesShort.innerHTML = `
+          <strong>Quick Form Cues:</strong>
+          <ul>${shortList}</ul>
+        `;
+
+        const cuesToggle = document.createElement('div');
+        cuesToggle.className = 'cues-toggle';
+        cuesToggle.innerHTML = `<span>Show Full Form</span><span style="font-size:0.7rem;">▼</span>`;
+
+        const cuesDetailed = document.createElement('div');
+        cuesDetailed.className = 'cues-detailed';
+        cuesDetailed.textContent = item.detailedCues;
+
+        cuesToggle.addEventListener('click', () => {
+          const visible = cuesDetailed.style.display === 'block';
+          cuesDetailed.style.display = visible ? 'none' : 'block';
+          cuesToggle.innerHTML = visible
+            ? `<span>Show Full Form</span><span style="font-size:0.7rem;">▼</span>`
+            : `<span>Hide Full Form</span><span style="font-size:0.7rem;">▲</span>`;
+        });
+
+        // Set table
+        const table = document.createElement('table');
+        table.className = 'set-table';
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+          <tr>
+            <th>Set</th>
+            <th>Weight (lbs)</th>
+            <th>Reps</th>
+            <th>Notes</th>
+            <th>Log</th>
+          </tr>
+        `;
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+
+        for (let s = 1; s <= item.sets; s++) {
+          const tr = document.createElement('tr');
+
+          const tdSet = document.createElement('td');
+          tdSet.textContent = s;
+
+          const tdW = document.createElement('td');
+          const inpW = document.createElement('input');
+          inpW.type = 'number';
+          inpW.step = '0.5';
+          inpW.placeholder = 'lbs';
+          tdW.appendChild(inpW);
+
+          const tdR = document.createElement('td');
+          const inpR = document.createElement('input');
+          inpR.type = 'number';
+          inpR.min = '1';
+          inpR.placeholder = 'reps';
+          tdR.appendChild(inpR);
+
+          const tdN = document.createElement('td');
+          const inpN = document.createElement('input');
+          inpN.type = 'text';
+          inpN.placeholder = 'optional';
+          tdN.appendChild(inpN);
+
+          const tdBtn = document.createElement('td');
+          const btnSave = document.createElement('button');
+          btnSave.type = 'button';
+          btnSave.textContent = 'Save';
+          tdBtn.appendChild(btnSave);
+
+          tr.appendChild(tdSet);
+          tr.appendChild(tdW);
+          tr.appendChild(tdR);
+          tr.appendChild(tdN);
+          tr.appendChild(tdBtn);
+
+          tbody.appendChild(tr);
+
+          const status = document.createElement('div');
+          status.className = 'set-status';
+          bodyInner.appendChild(status);
+
+          btnSave.addEventListener('click', async () => {
+            const weight = inpW.value.trim();
+            const reps = inpR.value.trim();
+            const notes = inpN.value.trim();
+            if (!weight || !reps) {
+              status.textContent = 'Enter weight and reps before saving.';
+              status.className = 'set-status error';
+              return;
+            }
+            status.textContent = 'Saving...';
+            status.className = 'set-status';
+
+            const payload = {
+              day: day,
+              muscleGroup: item.muscleGroup,
+              exercise: item.exercise,
+              set: s,
+              weight,
+              reps,
+              notes
+            };
+
+            try {
+              await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+              });
+              // Local progression log
+              recordSetToHistory(item.exercise, s, weight, reps);
+              status.textContent = 'Saved ✔';
+              status.className = 'set-status ok';
+            } catch (err) {
+              console.error(err);
+              status.textContent = 'Error saving. Check connection or script URL.';
+              status.className = 'set-status error';
+            }
+          });
+        }
+
+        table.appendChild(tbody);
+
+        bodyInner.appendChild(infoRow);
+        bodyInner.appendChild(recRow);
+        bodyInner.appendChild(cuesShort);
+        bodyInner.appendChild(cuesToggle);
+        bodyInner.appendChild(cuesDetailed);
+        bodyInner.appendChild(table);
+
+        body.appendChild(bodyInner);
+
+        // Toggle card open/closed
+        let open = false;
+        header.addEventListener('click', () => {
+          open = !open;
+          if (open) {
+            body.style.maxHeight = bodyInner.offsetHeight + 24 + 'px';
+            header.querySelector('.chevron').innerHTML = '&#9660;';
+          } else {
+            body.style.maxHeight = '0';
+            header.querySelector('.chevron').innerHTML = '&#9654;';
+          }
+        });
+
+        card.appendChild(header);
+        card.appendChild(body);
+        exercisesContainer.appendChild(card);
+      });
+    }
+
+    // Initialize app
+    initTimer();
+    initDaySelect();
+  </script>
+</body>
+</html>
