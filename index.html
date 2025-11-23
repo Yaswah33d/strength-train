@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Strength Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6A0DAD" />
+
+  <!-- iOS PWA support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <script>
+    // Register service worker for PWA
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("./service-worker.js")
+          .catch(err => console.error("SW registration failed:", err));
+      });
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg: #05050a;
+      --card-bg: #0a0a15;
+      --border: #1f1f2b;
+      --text: #e5e7eb;
+      --text-muted: #9ca3af;
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent-soft: #a78bfa;
+      --danger: #f97373;
+      --success: #4ade80;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 1rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: radial-gradient(circle at top, #111827 0, var(--bg) 45%);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 720px;
+      margin: 0 auto 5rem auto; /* leave room for floating timer */
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.6rem;
+      margin: 0.25rem 0 0.25rem;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    .top-card {
+      background: rgba(10, 10, 21, 0.95);
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      padding: 0.9rem 1rem 1rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+    }
+
+    select,
+    input,
+    button {
+      font-size: 0.9rem;
+      font-family: inherit;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+      background: #020617;
+      color: var(--text);
+      padding: 0.55rem 0.65rem;
+      width: 100%;
+    }
+
+    select:focus,
+    input:focus {
+      outline: none;
+      border-color: var(--accent-soft);
+      box-shadow: 0 0 0 1px var(--accent-soft);
+    }
+
+    button {
+      border: none;
+      background: var(--accent);
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s ease, transform 0.05s ease;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .row > div {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .day-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--accent-soft);
+      background: rgba(124, 58, 237, 0.12);
+      border: 1px solid rgba(124, 58, 237, 0.35);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: #020617;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      gap: 0.25rem;
+    }
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    .exercises {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .card {
+      background: rgba(10, 10, 21, 0.96);
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.65rem 0.8rem;
+      cursor: pointer;
+    }
+
+    .card-header-static {
+      cursor: default;
+    }
+
+    .card-header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .card-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .chevron {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .card-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.25s ease;
+      padding: 0 0.8rem;
+    }
+
+    .card-body-inner {
+      padding: 0.1rem 0 0.7rem;
+      border-top: 1px solid rgba(31, 41, 55, 0.7);
+      margin-top: 0.45rem;
+    }
+
+    .row-tight {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 0.45rem;
+    }
+
+    .row-tight strong {
+      color: var(--text);
+    }
+
+    .capsule {
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+      border: 1px solid rgba(31, 41, 55, 0.8);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .capsule span {
+      font-size: 0.75rem;
+    }
+
+    .capsule-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .cues-short {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin: 0.35rem 0;
+    }
+
+    .cues-short ul {
+      padding-left: 1.1rem;
+      margin: 0.2rem 0 0;
+    }
+
+    .cues-short li {
+      margin-bottom: 0.05rem;
+    }
+
+    .cues-toggle {
+      font-size: 0.78rem;
+      color: var(--accent-soft);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-bottom: 0.2rem;
+      margin-top: 0.2rem;
+    }
+
+    .cues-detailed {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+      display: none;
+      white-space: pre-line;
+    }
+
+    .set-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.25rem;
+      font-size: 0.78rem;
+    }
+
+    .set-table th,
+    .set-table td {
+      padding: 0.15rem 0.2rem;
+      text-align: left;
+    }
+
+    .set-table th {
+      color: var(--text-muted);
+      font-weight: 500;
+      border-bottom: 1px solid rgba(31, 41, 55, 0.8);
+    }
+
+    .set-table td input {
+      font-size: 0.78rem;
+      padding: 0.3rem 0.35rem;
+    }
+
+    .set-table button {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.45rem;
+      width: auto;
+      white-space: nowrap;
+    }
+
+    .set-status {
+      font-size: 0.7rem;
+      margin-top: 0.1rem;
+      min-height: 0.9rem;
+    }
+
+    .set-status.ok {
+      color: var(--success);
+    }
+
+    .set-status.error {
+      color: var(--danger);
+    }
+
+    .small-text {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
+    /* Floating Timer Button */
+    .timer-fab {
+      position: fixed;
+      right: 1.1rem;
+      bottom: 1.1rem;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 0, #a78bfa 0, var(--accent) 55%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f9fafb;
+      font-size: 0.75rem;
+      font-weight: 600;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.65);
+      cursor: pointer;
+      z-index: 40;
+      border: 1px solid rgba(167, 139, 250, 0.5);
+    }
+
+    .timer-fab span {
+      text-align: center;
+      line-height: 1.1;
+      white-space: pre-line;
+    }
+
+    /* Timer Modal */
+    .timer-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+
+    .timer-modal {
+      background: #020617;
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      width: min(420px, 100% - 2.5rem);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.8);
+    }
+
+    .timer-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .timer-modal-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .timer-close {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      background: #020617;
+    }
+
+    .timer-display {
+      font-size: 2.2rem;
+      text-align: center;
+      font-weight: 700;
+      margin: 0.4rem 0 0.5rem;
+      letter-spacing: 0.08em;
+    }
+
+    .timer-pills {
+      display: flex;
+      gap: 0.45rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .timer-pills button {
+      flex: 1;
+      padding: 0.35rem 0.4rem;
+      font-size: 0.8rem;
+      background: #020617;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .timer-pills button.active {
+      border-color: var(--accent-soft);
+      color: var(--accent-soft);
+      background: rgba(124, 58, 237, 0.13);
+    }
+
+    .timer-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .timer-controls button {
+      flex: 1;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.85rem;
+    }
+
+    .timer-note {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    @media (max-width: 480px) {
+      .top-card {
+        padding: 0.7rem 0.8rem 0.85rem;
+      }
+      .card-header {
+        padding: 0.6rem 0.7rem;
+      }
+      .card-body {
+        padding: 0 0.7rem;
+      }
+      .timer-modal {
+        padding: 0.9rem 0.9rem 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Strength Tracker</h1>
+    <div class="subtitle">
+      8-day cycle · Pick your day, your time budget, log sets, and let the app handle rest & progression.
+    </div>
+
+    <div class="top-card">
+      <div class="row">
+        <div>
+          <label for="daySelect">Training Day (8-Day Cycle)</label>
+          <select id="daySelect"></select>
+        </div>
+        <div>
+          <label for="timeSelect">Workout Time</label>
+          <select id="timeSelect">
+            <option value="35">35 min</option>
+            <option value="45" selected>45 min</option>
+            <option value="60">60 min</option>
+            <option value="75">75 min</option>
+          </select>
+        </div>
+        <div style="flex:0 0 auto;">
+          <div class="day-tag">
+            <span class="pill-dot"></span>
+            <span id="todayLabel">Select today in your 8-day cycle</span>
+          </div>
+        </div>
+      </div>
+      <div class="hint">
+        Only the day and time are dropdowns. Exercises, sets, and targets load automatically. You just enter
+        weight, reps, and notes. On Day 7, choose your back status and the app adapts.
+      </div>
+      <div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.4rem;">
+        <div class="pill">
+          <div class="pill-dot"></div>
+          <span>Goal: lean, dense, vascular</span>
+        </div>
+        <div class="pill">
+          <div class="pill-dot"></div>
+          <span>Back-safe · Glute-strong</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="exercisesContainer" class="exercises"></div>
+
+    <div class="small-text">
+      Each saved set is logged to your Google Sheet and stored locally for progression.
+      Timer auto-starts after a saved set (when that exercise has a recommended rest).
+    </div>
+  </div>
+
+  <!-- Floating Timer Button -->
+  <div class="timer-fab" id="timerFab">
+    <span id="timerFabText">⏱</span>
+  </div>
+
+  <!-- Timer Modal -->
+  <div class="timer-modal-backdrop" id="timerModalBackdrop">
+    <div class="timer-modal">
+      <div class="timer-modal-header">
+        <div class="timer-modal-title">Rest Timer</div>
+        <button class="timer-close" id="timerCloseBtn">✕</button>
+      </div>
+      <div class="timer-display" id="timerDisplay">01:00</div>
+      <div class="timer-pills" id="timerPills">
+        <button data-seconds="30">30s</button>
+        <button data-seconds="60" class="active">60s</button>
+        <button data-seconds="90">90s</button>
+        <button data-seconds="120">120s</button>
+      </div>
+      <div class="timer-controls">
+        <button id="timerStartBtn">Start</button>
+        <button id="timerPauseBtn">Pause/Resume</button>
+        <button id="timerResetBtn">Reset</button>
+      </div>
+      <div class="timer-note">
+        Change duration here for manual rests. Auto-rest uses the exercise’s recommendation + your time budget.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfEvvuQEaWzMyw1D0yw9D5LHXileZVlgoDvI873Q9Et-8p41Lq4voyd5ocF9x0JmND9w/exec';
+
+    const DAYS = [
+      'Day 1 – Push (Chest/Shoulders/Triceps)',
+      'Day 2 – Pull (Back/Biceps)',
+      'Day 3 – Legs + Shoulders',
+      'Day 4 – Rest / Active Recovery',
+      'Day 5 – Chest + Back Hybrid',
+      'Day 6 – Shoulders + Arms Pump',
+      'Day 7 – Conditioning / Back Status',
+      'Day 8 – Full Rest'
+    ];
+
+    const LS_REST_DURATION_KEY = 'sa_rest_duration_seconds';
+    const LS_EXERCISE_HISTORY_KEY = 'sa_exercise_history_v2';
+    const LS_TIME_PREF_KEY = 'sa_time_pref_minutes';
+    const LS_BACK_STATUS_KEY = 'sa_back_status';
+
+    // Workout definitions with recommendedRest in seconds (for ~45–60 min baseline)
+    const WORKOUTS = {
+      'Day 1 – Push (Chest/Shoulders/Triceps)': [
+        { muscleGroup: 'Chest', exercise: 'Incline DB Press', sets: 4, minReps: 6, maxReps: 8, recommendedRest: 90,
+          shortCues: [
+            'Bench low incline (25–30°).',
+            'Elbows ~45° from torso.',
+            'Lower to upper ribs, press over mid-chest.'
+          ],
+          detailedCues: `Set bench to a low incline. Feet flat, shoulder blades pinched.
+Lower dumbbells under control to upper-rib/lower-chest area.
+Press up while keeping elbows slightly tucked, not flared.
+Don’t bounce; aim for powerful but smooth reps.` },
+        { muscleGroup: 'Shoulders', exercise: 'Seated DB Shoulder Press', sets: 3, minReps: 6, maxReps: 8, recommendedRest: 90,
+          shortCues: [
+            'Bench near upright, ribs down.',
+            'Elbows slightly in front, not flared.',
+            'Press without over-arching low back.'
+          ],
+          detailedCues: `Sit on a bench with back support. Keep ribs stacked over pelvis.
+Start with dumbbells at chin/eye level, palms slightly forward.
+Press overhead in a slight arc, not in front of your face.
+Lower slowly for shoulder health.` },
+        { muscleGroup: 'Chest', exercise: 'Cable / Machine Fly', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Soft elbows stay fixed.',
+            'Hug a barrel, don’t clap hands.',
+            'Big stretch, strong squeeze.'
+          ],
+          detailedCues: `Set handles at chest height. Step forward into tension.
+Bring arms together like hugging a barrel, elbows slightly bent.
+Pause at the front to squeeze chest, then return under control to a stretch.` },
+        { muscleGroup: 'Shoulders', exercise: 'DB Lateral Raise', sets: 4, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Shoulders down, don’t shrug.',
+            'Lead with elbows, slight pinky up.',
+            'Raise to shoulder height, slow down.'
+          ],
+          detailedCues: `Stand tall with dumbbells at sides.
+Pull shoulders down, raise arms out until about shoulder height.
+Lead with elbows and keep a small bend; avoid swinging.` },
+        { muscleGroup: 'Triceps', exercise: 'Rope Pushdown', sets: 3, minReps: 10, maxReps: 12, recommendedRest: 60,
+          shortCues: [
+            'Elbows pinned to sides.',
+            'Spread rope at bottom.',
+            'Don’t let shoulders roll forward.'
+          ],
+          detailedCues: `Stand close to stack, slight forward lean.
+Push rope straight down, then spread at the bottom.
+Control return; avoid using body momentum.` },
+        { muscleGroup: 'Triceps', exercise: 'Overhead DB Extension', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Elbows pointed up, close to head.',
+            'Lower behind head to stretch.',
+            'Extend without flaring wide.'
+          ],
+          detailedCues: `Hold one DB overhead with both hands under top plate.
+Lower behind head, feeling a stretch in triceps.
+Keep elbows mostly pointing up and close to your head as you extend.` },
+        { muscleGroup: 'Rear Delts', exercise: 'Rear Delt Machine Fly', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Chest tall on pad.',
+            'Elbows out and slightly back.',
+            'Squeeze between shoulder blades gently.'
+          ],
+          detailedCues: `Face the pad, chest supported.
+Open arms in an arc, focusing on rear shoulders.
+Pause briefly at full contraction, then return slowly.` }
+      ],
+
+      'Day 2 – Pull (Back/Biceps)': [
+        { muscleGroup: 'Back', exercise: 'Lat Pulldown (Heavy)', sets: 4, minReps: 8, maxReps: 10, recommendedRest: 90,
+          shortCues: [
+            'Grip just wider than shoulders.',
+            'Chest up, slight lean back.',
+            'Pull bar to upper chest.'
+          ],
+          detailedCues: `Secure your legs under the pad.
+Grip just outside shoulder width, lean back slightly.
+Pull bar to upper chest while driving elbows down and in.
+Control the rise; no swinging.` },
+        { muscleGroup: 'Back', exercise: 'Chest-Supported Row', sets: 4, minReps: 8, maxReps: 10, recommendedRest: 90,
+          shortCues: [
+            'Chest lightly on pad.',
+            'Row toward lower ribs/hips.',
+            'Don’t bounce off pad.'
+          ],
+          detailedCues: `Lie or sit with chest supported.
+Row weights toward lower ribs or waistline.
+Pause at the top, then lower under control.` },
+        { muscleGroup: 'Back', exercise: 'Straight-Arm Cable Pulldown', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Soft elbows, arms straight.',
+            'Arc bar to thighs.',
+            'Think elbows driving toward pockets.'
+          ],
+          detailedCues: `Stand with slight hip hinge.
+With straight arms, pull bar in a wide arc down to your thighs.
+Squeeze lats at the bottom, then return slowly.` },
+        { muscleGroup: 'Back', exercise: 'Seated Cable Row', sets: 3, minReps: 10, maxReps: 12, recommendedRest: 75,
+          shortCues: [
+            'Chest tall, no lower-back rounding.',
+            'Row handle to lower ribs.',
+            'Control, no torso swinging.'
+          ],
+          detailedCues: `Sit tall, slight lean forward from hips.
+Row handle toward lower ribs, squeezing mid-back.
+Avoid jerking or leaning excessively.` },
+        { muscleGroup: 'Biceps', exercise: 'Standing Barbell Curl', sets: 3, minReps: 8, maxReps: 10, recommendedRest: 60,
+          shortCues: [
+            'Elbows pinned by sides.',
+            'Curl without leaning back.',
+            'Lower slowly.'
+          ],
+          detailedCues: `Stand tall with underhand grip.
+Curl bar toward chest without swinging.
+Pause, then lower under control.` },
+        { muscleGroup: 'Biceps', exercise: 'Incline DB Curl', sets: 3, minReps: 10, maxReps: 12, recommendedRest: 60,
+          shortCues: [
+            'Elbows slightly behind body.',
+            'Full stretch at bottom.',
+            'Don’t let shoulders roll forward.'
+          ],
+          detailedCues: `On a 55–65° bench, let arms hang.
+Curl while keeping elbows back and chest tall.
+Lower until you feel a deep stretch.` },
+        { muscleGroup: 'Upper Back', exercise: 'Face Pull (Optional)', sets: 2, minReps: 12, maxReps: 15, recommendedRest: 45,
+          shortCues: [
+            'Rope to forehead or nose.',
+            'Elbows high and out.',
+            'Squeeze rear delts.'
+          ],
+          detailedCues: `Use rope at face height.
+Pull toward nose/forehead with elbows high.
+Pause, then return under control.` }
+      ],
+
+      'Day 3 – Legs + Shoulders': [
+        { muscleGroup: 'Quads/Glutes', exercise: 'Leg Press', sets: 4, minReps: 10, maxReps: 12, recommendedRest: 90,
+          shortCues: [
+            'Feet shoulder-width, slight turn-out.',
+            'Lower until knees ~90° without butt lift.',
+            'Drive through mid-foot/heel.'
+          ],
+          detailedCues: `Set feet shoulder-width on sled.
+Lower until knees are about 90° (or comfortable).
+Keep lower back against pad, no butt tuck.
+Press through heels/mid-foot to return.` },
+        { muscleGroup: 'Quads/Glutes', exercise: 'Bulgarian Split Squat', sets: 3, minReps: 8, maxReps: 10, recommendedRest: 90,
+          shortCues: [
+            'Back foot on bench.',
+            'Front shin near vertical.',
+            'Drop back knee toward floor.'
+          ],
+          detailedCues: `Back foot on bench, front foot far enough forward.
+Lower under control until back knee nears floor.
+Drive up through front leg, keeping torso tall.` },
+        { muscleGroup: 'Hamstrings', exercise: 'Hamstring Curl (Seated or Lying)', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Align knee with machine axis.',
+            'Curl heel toward glutes.',
+            'Slow negative.'
+          ],
+          detailedCues: `Adjust pad just above ankles.
+Curl toward glutes, squeeze at top.
+Lower with control; don’t slam weight.` },
+        { muscleGroup: 'Glutes', exercise: 'Hip Thrust / Glute Bridge', sets: 3, minReps: 10, maxReps: 12, recommendedRest: 75,
+          shortCues: [
+            'Shins near vertical at top.',
+            'Drive hips up by squeezing glutes.',
+            'Stop at straight line, don’t over-arch.'
+          ],
+          detailedCues: `Upper back on bench or on floor for bridges.
+Feet so that shins are vertical at top.
+Drive hips up, squeeze glutes hard.
+Lower under control.` },
+        { muscleGroup: 'Shoulders', exercise: 'DB Lateral Raise (Moderate)', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Same lateral form, moderate weight.',
+            'No swinging.',
+            'Constant tension.'
+          ],
+          detailedCues: `Same mechanics as Day 1 lateral raises.
+Use moderate weight, focus on smooth tension.` },
+        { muscleGroup: 'Calves', exercise: 'Standing Calf Raise (Optional)', sets: 2, minReps: 12, maxReps: 15, recommendedRest: 45,
+          shortCues: [
+            'Full stretch at bottom.',
+            'Pause at top squeeze.',
+            'Controlled tempo.'
+          ],
+          detailedCues: `Stand with balls of feet on edge.
+Drop heels into a stretch, then push up to toes.
+Pause briefly at top.` },
+        { muscleGroup: 'Core/Stability', exercise: 'Bird Dog / Dead Bug', sets: 3, minReps: 12, maxReps: 12, recommendedRest: 45,
+          shortCues: [
+            'Slow, controlled core work.',
+            'Keep spine neutral.',
+            'No twisting or arching.'
+          ],
+          detailedCues: `Alternate Bird Dog or Dead Bug.
+Focus on bracing and limb control without spinal movement.` }
+      ],
+
+      'Day 4 – Rest / Active Recovery': [],
+
+      'Day 5 – Chest + Back Hybrid': [
+        { muscleGroup: 'Chest', exercise: 'Bench Press (DB or Bar)', sets: 4, minReps: 5, maxReps: 6, recommendedRest: 90,
+          shortCues: [
+            'Feet planted, small arch.',
+            'Bar over mid-chest.',
+            'Controlled lower, strong press.'
+          ],
+          detailedCues: `Lie on bench, feet flat, natural low-back arch.
+Lower bar/dumbbells to mid-chest.
+Press up while keeping shoulder blades pinched.` },
+        { muscleGroup: 'Back', exercise: 'Pull-Ups / Lat Pulldown', sets: 3, minReps: 6, maxReps: 8, recommendedRest: 90,
+          shortCues: [
+            'Chest tall, elbows down.',
+            'Full stretch, no half reps.',
+            'Use assistance if needed.'
+          ],
+          detailedCues: `Either bodyweight pull-ups with assistance or pulldown.
+Pull to upper chest, control stretch at top.` },
+        { muscleGroup: 'Back', exercise: 'Chest-Supported DB Row', sets: 3, minReps: 8, maxReps: 10, recommendedRest: 90,
+          shortCues: [
+            'Chest on pad.',
+            'Row toward waist.',
+            'Squeeze mid-back.'
+          ],
+          detailedCues: `Same mechanics as earlier chest-supported rows.` },
+        { muscleGroup: 'Chest', exercise: 'Incline Machine Chest Press', sets: 3, minReps: 10, maxReps: 12, recommendedRest: 75,
+          shortCues: [
+            'Seat so handles are at mid-chest.',
+            'Press up without shoulder shrug.',
+            'Control negative.'
+          ],
+          detailedCues: `Machine incline for safe upper-chest work.` },
+        { muscleGroup: 'Back', exercise: 'Straight-Arm Pulldown', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Same technique as before.',
+            'Pump style set.',
+            'Control and squeeze.'
+          ],
+          detailedCues: `Use moderate weight for lat pump and control.` },
+        { muscleGroup: 'Biceps', exercise: 'Hammer Curl', sets: 2, minReps: 12, maxReps: 12, recommendedRest: 60,
+          shortCues: [
+            'Neutral grip (thumbs up).',
+            'Elbows by sides.',
+            'No swinging.'
+          ],
+          detailedCues: `Curl with neutral grip to hit brachialis and forearms.` },
+        { muscleGroup: 'Triceps', exercise: 'Rope Pushdown / Bench Dips', sets: 2, minReps: 15, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Pump style finisher.',
+            'No shoulder pain.',
+            'Short rest.'
+          ],
+          detailedCues: `Choose the variation that feels best on elbows and shoulders.` }
+      ],
+
+      'Day 6 – Shoulders + Arms Pump': [
+        { muscleGroup: 'Shoulders', exercise: 'Machine Shoulder Press', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 75,
+          shortCues: [
+            'Seat so handles near chin.',
+            'Press up without arching.',
+            'Moderate, pump-focused load.'
+          ],
+          detailedCues: `Use machine for joint-friendly overhead volume.` },
+        { muscleGroup: 'Shoulders', exercise: 'Standing Lateral Raise', sets: 4, minReps: 15, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Lighter weight, higher reps.',
+            'Constant tension.',
+            'No body English.'
+          ],
+          detailedCues: `Pure delt pump, keep ego in check.` },
+        { muscleGroup: 'Rear Delts', exercise: 'Rear Delt Fly (Cable or Machine)', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Chest tall, no shrug.',
+            'Elbows out and back.',
+            'Pause at squeeze.'
+          ],
+          detailedCues: `Same rear delt focus as Day 1, pump style.` },
+        { muscleGroup: 'Biceps', exercise: 'Cable Curl', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Elbows locked by sides.',
+            'Squeeze hard at top.',
+            'Slow negative.'
+          ],
+          detailedCues: `Use cable for continuous tension on biceps.` },
+        { muscleGroup: 'Triceps', exercise: 'Rope Pushdown (Pump)', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 60,
+          shortCues: [
+            'Same as earlier, lighter load.',
+            'Chase the burn.',
+            'Short rest.'
+          ],
+          detailedCues: `Volume tricep work for size and definition.` },
+        { muscleGroup: 'Biceps', exercise: 'Preacher Curl (Machine)', sets: 2, minReps: 10, maxReps: 12, recommendedRest: 60,
+          shortCues: [
+            'Upper arm fixed.',
+            'Full stretch, full squeeze.',
+            'No bouncing.'
+          ],
+          detailedCues: `Use the pad to lock upper arm, move only forearms.` },
+        { muscleGroup: 'Triceps', exercise: 'Skull Crushers (EZ or DB)', sets: 2, minReps: 10, maxReps: 12, recommendedRest: 60,
+          shortCues: [
+            'Bar to forehead or slightly behind.',
+            'Elbows mostly fixed.',
+            'Smooth, no snapping.'
+          ],
+          detailedCues: `Lie flat, lower weight toward forehead or just behind.
+Extend without flaring elbows wide.` }
+      ],
+
+      'Day 7 – Conditioning / Back Status': {
+        good: [
+          { muscleGroup: 'Quads', exercise: 'Leg Extension', sets: 2, minReps: 15, maxReps: 15, recommendedRest: 45,
+            shortCues: [
+              'Control up and down.',
+              'No knee pain.',
+              'Short rest.'
+            ],
+            detailedCues: `Light isolation for quads, focus on control.` },
+          { muscleGroup: 'Hamstrings', exercise: 'Hamstring Curl (Light)', sets: 2, minReps: 15, maxReps: 15, recommendedRest: 45,
+            shortCues: [
+              'Pump style.',
+              'No swinging.',
+              'Smooth reps.'
+            ],
+            detailedCues: `Same form as earlier, just lighter and pump-focused.` },
+          { muscleGroup: 'Glutes', exercise: 'Hip Abduction Machine', sets: 2, minReps: 15, maxReps: 15, recommendedRest: 45,
+            shortCues: [
+              'Lean slightly forward.',
+              'Drive knees out.',
+              'Strong outer-glute squeeze.'
+            ],
+            detailedCues: `Use abduction for glute med (hip stability).` },
+          { muscleGroup: 'Conditioning', exercise: 'Step-Ups / Sled Push', sets: 2, minReps: 20, maxReps: 30, recommendedRest: 60,
+            shortCues: [
+              'Smooth pace, no jerky steps.',
+              'Drive through whole foot.',
+              'Don’t rush, breathe.'
+            ],
+            detailedCues: `Choose step-ups or sled based on equipment and back comfort.` },
+          { muscleGroup: 'Core', exercise: 'Cable Crunch', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 45,
+            shortCues: [
+              'Ribcage to pelvis.',
+              'Don’t pull with arms.',
+              'Controlled range.'
+            ],
+            detailedCues: `Kneeling cable crunch focusing on abs, not hips.` },
+          { muscleGroup: 'Core', exercise: 'Reverse Crunch', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 45,
+            shortCues: [
+              'Curl hips up gently.',
+              'No swinging legs.',
+              'Slow lowering.'
+            ],
+            detailedCues: `Focus on curling pelvis off floor, not kicking legs.` }
+        ],
+        tight: [
+          { muscleGroup: 'Conditioning', exercise: 'Cardio – Easy (Bike/Walk)', sets: 1, minReps: 10, maxReps: 15, recommendedRest: 0,
+            shortCues: [
+              '10–15 min easy pace.',
+              'No pain increase.',
+              'Focus on fluid motion.'
+            ],
+            detailedCues: `Use bike, elliptical, or incline walk at a conversational pace.` },
+          { muscleGroup: 'Core', exercise: 'Cable Crunch (Light)', sets: 3, minReps: 12, maxReps: 15, recommendedRest: 45,
+            shortCues: [
+              'Lighter weight than usual.',
+              'Smooth flexion.',
+              'Stop if back complains.'
+            ],
+            detailedCues: `Core work with back-friendly ROM.` },
+          { muscleGroup: 'Core', exercise: 'Dead Bug', sets: 3, minReps: 10, maxReps: 10, recommendedRest: 45,
+            shortCues: [
+              'Back gently pressed into floor.',
+              'Slow limb movement.',
+              'No arching.'
+            ],
+            detailedCues: `Alternate opposite arm and leg, focus on anti-extension.` },
+          { muscleGroup: 'Core/Stability', exercise: 'Bird Dog', sets: 3, minReps: 10, maxReps: 10, recommendedRest: 45,
+            shortCues: [
+              'Hips level.',
+              'Slow reach.',
+              'No twisting.'
+            ],
+            detailedCues: `On all fours, extend opposite arm/leg, hold briefly, return.` },
+          { muscleGroup: 'Mobility', exercise: 'Hip Flexor Stretch', sets: 2, minReps: 30, maxReps: 30, recommendedRest: 15,
+            shortCues: [
+              'Gentle pelvic tuck.',
+              'Feel stretch in front of hip.',
+              'No jamming lower back.'
+            ],
+            detailedCues: `Half-kneeling stretch with gentle pelvic tuck, 30s/side.` }
+        ],
+        flared: [] // handled as special messaging
+      },
+
+      'Day 8 – Full Rest': []
+    };
+
+    // === DOM ELEMENTS ===
+    const daySelect = document.getElementById('daySelect');
+    const timeSelect = document.getElementById('timeSelect');
+    const todayLabel = document.getElementById('todayLabel');
+    const exercisesContainer = document.getElementById('exercisesContainer');
+
+    const timerFab = document.getElementById('timerFab');
+    const timerFabText = document.getElementById('timerFabText');
+    const timerModalBackdrop = document.getElementById('timerModalBackdrop');
+    const timerCloseBtn = document.getElementById('timerCloseBtn');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerPills = document.getElementById('timerPills');
+    const timerStartBtn = document.getElementById('timerStartBtn');
+    const timerPauseBtn = document.getElementById('timerPauseBtn');
+    const timerResetBtn = document.getElementById('timerResetBtn');
+
+    // === TIMER STATE ===
+    let timerDuration = 60;
+    let timerRemaining = 60;
+    let timerInterval = null;
+    let timerRunning = false;
+    let restFactor = 1.0; // adjusted by timeSelect
+
+    // === BACK STATUS STATE (for Day 7) ===
+    let currentBackStatus = loadBackStatus() || 'good';
+
+    // === LOCAL STORAGE HELPERS ===
+    function loadJSON(key, fallback) {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function saveJSON(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function loadRestDuration() {
+      const stored = localStorage.getItem(LS_REST_DURATION_KEY);
+      if (stored) {
+        const val = parseInt(stored, 10);
+        if (!isNaN(val) && val > 0) {
+          timerDuration = val;
+          timerRemaining = val;
+        }
+      }
+    }
+
+    function saveRestDuration(seconds) {
+      localStorage.setItem(LS_REST_DURATION_KEY, String(seconds));
+    }
+
+    function loadTimePref() {
+      const stored = localStorage.getItem(LS_TIME_PREF_KEY);
+      if (!stored) return null;
+      const val = parseInt(stored, 10);
+      return isNaN(val) ? null : val;
+    }
+
+    function saveTimePref(minutes) {
+      localStorage.setItem(LS_TIME_PREF_KEY, String(minutes));
+    }
+
+    function loadBackStatus() {
+      const stored = localStorage.getItem(LS_BACK_STATUS_KEY);
+      return stored || null;
+    }
+
+    function saveBackStatus(status) {
+      localStorage.setItem(LS_BACK_STATUS_KEY, status);
+    }
+
+    // Exercise history for progression
+    function loadExerciseHistory() {
+      return loadJSON(LS_EXERCISE_HISTORY_KEY, {});
+    }
+
+    function saveExerciseHistory(history) {
+      saveJSON(LS_EXERCISE_HISTORY_KEY, history);
+    }
+
+    function buildHistoryKey(exerciseName) {
+      return exerciseName.toLowerCase().replace(/\s+/g, '_');
+    }
+
+    function recordSetToHistory(exerciseName, setNumber, weight, reps) {
+      const history = loadExerciseHistory();
+      const key = buildHistoryKey(exerciseName);
+      const now = new Date().toISOString();
+      if (!history[key]) {
+        history[key] = {
+          lastDate: now,
+          sets: []
+        };
+      }
+      history[key].lastDate = now;
+      if (!Array.isArray(history[key].sets)) history[key].sets = [];
+      history[key].sets[setNumber - 1] = { weight, reps };
+      saveExerciseHistory(history);
+    }
+
+    function getExerciseHistory(exerciseName) {
+      const history = loadExerciseHistory();
+      const key = buildHistoryKey(exerciseName);
+      return history[key] || null;
+    }
+
+    function buildRecommendation(history, minReps, maxReps) {
+      if (!history || !Array.isArray(history.sets) || history.sets.length === 0) {
+        return {
+          lastSummary: 'No past data yet – this is your first logged session.',
+          recommendation: 'Use a moderate weight and focus on perfect form. Targets will adapt after today.'
+        };
+      }
+      let workingWeight = null;
+      let totalReps = 0;
+      let setsCount = 0;
+
+      history.sets.forEach(s => {
+        if (!s) return;
+        const w = Number(s.weight);
+        const r = Number(s.reps);
+        if (!isNaN(w) && !isNaN(r)) {
+          if (workingWeight === null) workingWeight = w;
+          totalReps += r;
+          setsCount++;
+        }
+      });
+
+      if (!setsCount || workingWeight === null) {
+        return {
+          lastSummary: 'Last session: logged but incomplete data.',
+          recommendation: 'Today: log full sets with clear weight and reps so progression can kick in.'
+        };
+      }
+
+      const avgReps = totalReps / setsCount;
+      const lastSummary = `Last session: ${workingWeight} lbs across ${setsCount} set(s), total ${totalReps} rep(s).`;
+
+      let recommendation;
+      if (avgReps >= maxReps - 0.5) {
+        recommendation = `You were near the top of the ${minReps}–${maxReps} range. Try +2.5–5 lbs while staying inside that rep window.`;
+      } else if (avgReps >= minReps) {
+        recommendation = `Solid middle of the range. Keep weight and aim for +1–2 total reps across all sets.`;
+      } else {
+        recommendation = `Reps were below target. Keep the same or slightly lighter weight and clean up form toward ${minReps}–${maxReps} reps.`;
+      }
+
+      return { lastSummary, recommendation };
+    }
+
+    // === TIMER FUNCTIONS ===
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateTimerDisplay() {
+      timerDisplay.textContent = formatTime(timerRemaining);
+      if (timerRunning) {
+        timerFabText.textContent = `⏱\n${formatTime(timerRemaining)}`;
+      } else {
+        timerFabText.textContent = '⏱';
+      }
+    }
+
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerRunning = true;
+      timerInterval = setInterval(() => {
+        timerRemaining--;
+        if (timerRemaining <= 0) {
+          timerRemaining = 0;
+          timerRunning = false;
+          clearInterval(timerInterval);
+          timerInterval = null;
+          if (navigator.vibrate) {
+            navigator.vibrate(300);
+          }
+          alert('Rest over – next set.');
+        }
+        updateTimerDisplay();
+      }, 1000);
+      updateTimerDisplay();
+    }
+
+    function startTimerWithDuration(seconds) {
+      const sec = Math.max(10, Math.round(seconds));
+      timerDuration = sec;
+      timerRemaining = sec;
+      saveRestDuration(sec);
+      startTimer();
+    }
+
+    function pauseTimer() {
+      timerRunning = false;
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      updateTimerDisplay();
+    }
+
+    function resetTimer() {
+      timerRunning = false;
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      timerRemaining = timerDuration;
+      updateTimerDisplay();
+    }
+
+    function openTimerModal() {
+      timerModalBackdrop.style.display = 'flex';
+    }
+
+    function closeTimerModal() {
+      timerModalBackdrop.style.display = 'none';
+    }
+
+    function initTimer() {
+      loadRestDuration();
+      // Init pills
+      const pills = timerPills.querySelectorAll('button');
+      pills.forEach(btn => {
+        const sec = Number(btn.dataset.seconds);
+        if (sec === timerDuration) {
+          btn.classList.add('active');
+        }
+        btn.addEventListener('click', () => {
+          pills.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          timerDuration = sec;
+          timerRemaining = sec;
+          saveRestDuration(sec);
+          resetTimer();
+        });
+      });
+      updateTimerDisplay();
+
+      timerFab.addEventListener('click', openTimerModal);
+      timerCloseBtn.addEventListener('click', closeTimerModal);
+      timerStartBtn.addEventListener('click', () => {
+        if (!timerRunning) {
+          if (timerRemaining <= 0) {
+            timerRemaining = timerDuration;
+          }
+          startTimer();
+        }
+      });
+      timerPauseBtn.addEventListener('click', () => {
+        if (timerRunning) {
+          pauseTimer();
+        } else if (timerRemaining > 0 && timerRemaining <= timerDuration) {
+          startTimer();
+        }
+      });
+      timerResetBtn.addEventListener('click', resetTimer);
+    }
+
+    // === RENDERING ===
+    function initDaySelect() {
+      DAYS.forEach(day => {
+        const opt = document.createElement('option');
+        opt.value = day;
+        opt.textContent = day;
+        daySelect.appendChild(opt);
+      });
+
+      daySelect.value = DAYS[0];
+      todayLabel.textContent = 'Start at Day 1 and cycle 3-on / 1-off.';
+      daySelect.addEventListener('change', () => {
+        renderDay(daySelect.value);
+      });
+    }
+
+    function initTimeSelect() {
+      const stored = loadTimePref();
+      if (stored && ['35','45','60','75'].includes(String(stored))) {
+        timeSelect.value = String(stored);
+      }
+      updateRestFactor();
+      timeSelect.addEventListener('change', () => {
+        saveTimePref(Number(timeSelect.value));
+        updateRestFactor();
+      });
+    }
+
+    function updateRestFactor() {
+      const minutes = Number(timeSelect.value);
+      // 35 = aggressive, 45 = baseline, 60 = slightly longer, 75 = longer
+      if (minutes === 35) restFactor = 0.8;
+      else if (minutes === 45) restFactor = 1.0;
+      else if (minutes === 60) restFactor = 1.1;
+      else if (minutes === 75) restFactor = 1.2;
+      else restFactor = 1.0;
+    }
+
+    function renderDay(day) {
+      exercisesContainer.innerHTML = '';
+
+      if (day === 'Day 4 – Rest / Active Recovery') {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-header card-header-static">
+            <div class="card-header-left">
+              <div class="card-title">Rest / Active Recovery (Home)</div>
+              <div class="card-subtitle">10–15 min at home · spine unload · hips + core</div>
+            </div>
+          </div>
+          <div class="card-body" style="max-height:none; padding:0 0.8rem;">
+            <div class="card-body-inner">
+              <div class="cues-short">
+                <strong>Suggested Flow:</strong>
+                <ul>
+                  <li>Breathing & pelvic reset (2 min)</li>
+                  <li>90/90 hip switches (2 min)</li>
+                  <li>Hip flexor / quad stretch (2–3 min)</li>
+                  <li>Cat–camel (1–2 min)</li>
+                  <li>Thoracic open book (2 min)</li>
+                  <li>Bird dog (2 min)</li>
+                  <li>Dead bug (2 min)</li>
+                </ul>
+                Move smooth, no pain, no weights. Focus on feeling better when you stand up.
+              </div>
+            </div>
+          </div>
+        `;
+        exercisesContainer.appendChild(card);
+        return;
+      }
+
+      if (day === 'Day 8 – Full Rest') {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-header card-header-static">
+            <div class="card-header-left">
+              <div class="card-title">Full Rest</div>
+              <div class="card-subtitle">Walk, hydrate, sleep, recover. No lifting today.</div>
+            </div>
+          </div>
+        `;
+        exercisesContainer.appendChild(card);
+        return;
+      }
+
+      // Special handling for Day 7 (back status)
+      if (day === 'Day 7 – Conditioning / Back Status') {
+        renderDay7WithBackStatus();
+        return;
+      }
+
+      const workout = WORKOUTS[day];
+      if (!workout || workout.length === 0) {
+        const msg = document.createElement('div');
+        msg.className = 'small-text';
+        msg.textContent = 'No programmed workout for this day.';
+        exercisesContainer.appendChild(msg);
+        return;
+      }
+
+      renderExerciseList(workout, day);
+    }
+
+    function renderDay7WithBackStatus() {
+      exercisesContainer.innerHTML = '';
+
+      // Back status selector
+      const statusCard = document.createElement('div');
+      statusCard.className = 'card';
+      const header = document.createElement('div');
+      header.className = 'card-header card-header-static';
+      header.innerHTML = `
+        <div class="card-header-left">
+          <div class="card-title">Back Status</div>
+          <div class="card-subtitle">Choose how your back feels and we’ll adapt Day 7.</div>
+        </div>
+      `;
+      const body = document.createElement('div');
+      body.className = 'card-body';
+      body.style.maxHeight = 'none';
+      body.style.padding = '0 0.8rem';
+
+      const inner = document.createElement('div');
+      inner.className = 'card-body-inner';
+
+      const label = document.createElement('label');
+      label.textContent = 'How does your back feel today?';
+
+      const select = document.createElement('select');
+      ['good', 'tight', 'flared'].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent =
+          val === 'good'
+            ? 'Feels great – normal light legs + core'
+            : val === 'tight'
+              ? 'Tight / a bit sore – conditioning + core only'
+              : 'Flared / high pain – deload (no weights)';
+        select.appendChild(opt);
+      });
+      select.value = currentBackStatus;
+      select.addEventListener('change', () => {
+        currentBackStatus = select.value;
+        saveBackStatus(currentBackStatus);
+        // re-render below list
+        renderDay7ExercisesBelow(statusCard.nextSibling);
+      });
+
+      inner.appendChild(label);
+      inner.appendChild(select);
+      const expl = document.createElement('div');
+      expl.className = 'hint';
+      expl.textContent =
+        'If it feels great: you can do light legs + core. If tight: skip leg machines. If flared: just walk and mobility, no logging needed.';
+      inner.appendChild(expl);
+      body.appendChild(inner);
+      statusCard.appendChild(header);
+      statusCard.appendChild(body);
+      exercisesContainer.appendChild(statusCard);
+
+      // Placeholder for exercises
+      const listContainer = document.createElement('div');
+      listContainer.id = 'day7ExerciseList';
+      exercisesContainer.appendChild(listContainer);
+
+      renderDay7ExercisesBelow(listContainer);
+    }
+
+    function renderDay7ExercisesBelow(container) {
+      const listContainer =
+        container && container.id === 'day7ExerciseList'
+          ? container
+          : document.getElementById('day7ExerciseList');
+      if (!listContainer) return;
+
+      listContainer.innerHTML = '';
+      const variants = WORKOUTS['Day 7 – Conditioning / Back Status'];
+
+      if (currentBackStatus === 'flared') {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-header card-header-static">
+            <div class="card-header-left">
+              <div class="card-title">Flare Protocol – No Logging</div>
+              <div class="card-subtitle">Walk, breathe, reset. No weights today.</div>
+            </div>
+          </div>
+          <div class="card-body" style="max-height:none; padding:0 0.8rem;">
+            <div class="card-body-inner">
+              <div class="cues-short">
+                <strong>Do this instead:</strong>
+                <ul>
+                  <li>10–15 min easy walk</li>
+                  <li>Breathing + pelvic reset</li>
+                  <li>Cat–camel · Open book</li>
+                  <li>Bird dog only if pain-free</li>
+                </ul>
+                No weighted work. Use this day to calm everything down so your next cycle stays strong.
+              </div>
+            </div>
+          </div>
+        `;
+        listContainer.appendChild(card);
+        return;
+      }
+
+      const workout = variants[currentBackStatus] || [];
+      if (!workout.length) {
+        const msg = document.createElement('div');
+        msg.className = 'small-text';
+        msg.textContent = 'No programmed items for this back status.';
+        listContainer.appendChild(msg);
+        return;
+      }
+
+      // Use the same renderer as other days
+      const wrapper = document.createElement('div');
+      wrapper.className = 'exercises';
+      listContainer.appendChild(wrapper);
+      renderExerciseList(workout, 'Day 7 – Conditioning / Back Status', wrapper);
+    }
+
+    function renderExerciseList(workout, day, containerOverride) {
+      const container = containerOverride || exercisesContainer;
+
+      workout.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const header = document.createElement('div');
+        header.className = 'card-header';
+        header.innerHTML = `
+          <div class="card-header-left">
+            <div class="card-title">${item.exercise}</div>
+            <div class="card-subtitle">${item.muscleGroup} • ${item.sets} set(s) · ${item.minReps}–${item.maxReps} reps</div>
+          </div>
+          <div class="chevron">&#9654;</div>
+        `;
+
+        const body = document.createElement('div');
+        body.className = 'card-body';
+
+        const bodyInner = document.createElement('div');
+        bodyInner.className = 'card-body-inner';
+
+        // History + recommendation (only for items that are loggable sets)
+        if (item.sets && item.sets > 0 && item.minReps && item.maxReps) {
+          const history = getExerciseHistory(item.exercise);
+          const { lastSummary, recommendation } = buildRecommendation(history, item.minReps, item.maxReps);
+
+          const infoRow = document.createElement('div');
+          infoRow.className = 'row-tight';
+          infoRow.innerHTML = `
+            <span class="capsule">
+              <span class="capsule-dot"></span>
+              <span><strong>Last:</strong> ${lastSummary}</span>
+            </span>
+          `;
+
+          const recRow = document.createElement('div');
+          recRow.className = 'row-tight';
+          recRow.innerHTML = `
+            <span class="capsule">
+              <span class="capsule-dot" style="background:var(--accent-soft);"></span>
+              <span><strong>Today:</strong> ${recommendation}</span>
+            </span>
+          `;
+
+          bodyInner.appendChild(infoRow);
+          bodyInner.appendChild(recRow);
+        }
+
+        // Recommended rest line, if available
+        if (item.recommendedRest && item.recommendedRest > 0) {
+          const restRow = document.createElement('div');
+          restRow.className = 'row-tight';
+          const scaled = Math.round(item.recommendedRest * restFactor);
+          restRow.innerHTML = `
+            <span class="capsule">
+              <span class="capsule-dot" style="background:var(--accent);"></span>
+              <span><strong>Recommended rest:</strong> ~${scaled} sec (auto timer after each saved set)</span>
+            </span>
+          `;
+          bodyInner.appendChild(restRow);
+        }
+
+        // Cues
+        if (item.shortCues && item.shortCues.length) {
+          const cuesShort = document.createElement('div');
+          cuesShort.className = 'cues-short';
+          const shortList = item.shortCues.map(c => `<li>${c}</li>`).join('');
+          cuesShort.innerHTML = `
+            <strong>Quick Form Cues:</strong>
+            <ul>${shortList}</ul>
+          `;
+          bodyInner.appendChild(cuesShort);
+        }
+
+        if (item.detailedCues) {
+          const cuesToggle = document.createElement('div');
+          cuesToggle.className = 'cues-toggle';
+          cuesToggle.innerHTML = `<span>Show Full Form</span><span style="font-size:0.7rem;">▼</span>`;
+
+          const cuesDetailed = document.createElement('div');
+          cuesDetailed.className = 'cues-detailed';
+          cuesDetailed.textContent = item.detailedCues;
+
+          cuesToggle.addEventListener('click', () => {
+            const visible = cuesDetailed.style.display === 'block';
+            cuesDetailed.style.display = visible ? 'none' : 'block';
+            cuesToggle.innerHTML = visible
+              ? `<span>Show Full Form</span><span style="font-size:0.7rem;">▼</span>`
+              : `<span>Hide Full Form</span><span style="font-size:0.7rem;">▲</span>`;
+          });
+
+          bodyInner.appendChild(cuesToggle);
+          bodyInner.appendChild(cuesDetailed);
+        }
+
+        // Set table if we have sets/reps
+        if (item.sets && item.sets > 0 && item.minReps && item.maxReps) {
+          const table = document.createElement('table');
+          table.className = 'set-table';
+          const thead = document.createElement('thead');
+          thead.innerHTML = `
+            <tr>
+              <th>Set</th>
+              <th>Weight (lbs)</th>
+              <th>Reps</th>
+              <th>Notes</th>
+              <th>Log</th>
+            </tr>
+          `;
+          table.appendChild(thead);
+
+          const tbody = document.createElement('tbody');
+
+          for (let s = 1; s <= item.sets; s++) {
+            const tr = document.createElement('tr');
+
+            const tdSet = document.createElement('td');
+            tdSet.textContent = s;
+
+            const tdW = document.createElement('td');
+            const inpW = document.createElement('input');
+            inpW.type = 'number';
+            inpW.step = '0.5';
+            inpW.placeholder = 'lbs';
+            tdW.appendChild(inpW);
+
+            const tdR = document.createElement('td');
+            const inpR = document.createElement('input');
+            inpR.type = 'number';
+            inpR.min = '1';
+            inpR.placeholder = 'reps';
+            tdR.appendChild(inpR);
+
+            const tdN = document.createElement('td');
+            const inpN = document.createElement('input');
+            inpN.type = 'text';
+            inpN.placeholder = 'optional';
+            tdN.appendChild(inpN);
+
+            const tdBtn = document.createElement('td');
+            const btnSave = document.createElement('button');
+            btnSave.type = 'button';
+            btnSave.textContent = 'Save';
+            tdBtn.appendChild(btnSave);
+
+            tr.appendChild(tdSet);
+            tr.appendChild(tdW);
+            tr.appendChild(tdR);
+            tr.appendChild(tdN);
+            tr.appendChild(tdBtn);
+            tbody.appendChild(tr);
+
+            const status = document.createElement('div');
+            status.className = 'set-status';
+            bodyInner.appendChild(status);
+
+            let isSaved = false;
+
+            btnSave.addEventListener('click', async () => {
+              // Toggle unsave locally (does not remove from sheet)
+              if (isSaved) {
+                isSaved = false;
+                btnSave.textContent = 'Save';
+                status.textContent = 'Set cleared locally. (Sheet entry remains this time.)';
+                status.className = 'set-status';
+                return;
+              }
+
+              const weight = inpW.value.trim();
+              const reps = inpR.value.trim();
+              const notes = inpN.value.trim();
+              if (!weight || !reps) {
+                status.textContent = 'Enter weight and reps before saving.';
+                status.className = 'set-status error';
+                return;
+              }
+              status.textContent = 'Saving...';
+              status.className = 'set-status';
+
+              const payload = {
+                day: day,
+                muscleGroup: item.muscleGroup,
+                exercise: item.exercise,
+                set: s,
+                weight,
+                reps,
+                notes
+              };
+
+              try {
+                await fetch(SCRIPT_URL, {
+                  method: 'POST',
+                  mode: 'no-cors',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+                recordSetToHistory(item.exercise, s, weight, reps);
+                status.textContent = 'Saved ✔';
+                status.className = 'set-status ok';
+                isSaved = true;
+                btnSave.textContent = 'Saved (tap to clear local)';
+
+                // Auto-start rest timer if this exercise has a recommended rest
+                if (item.recommendedRest && item.recommendedRest > 0) {
+                  const scaled = item.recommendedRest * restFactor;
+                  startTimerWithDuration(scaled);
+                }
+              } catch (err) {
+                console.error(err);
+                status.textContent = 'Error saving. Check connection or script URL.';
+                status.className = 'set-status error';
+              }
+            });
+          }
+
+          table.appendChild(tbody);
+          bodyInner.appendChild(table);
+        }
+
+        body.appendChild(bodyInner);
+
+        // Toggle card open/closed
+        let open = false;
+        header.addEventListener('click', () => {
+          if (header.classList.contains('card-header-static')) return;
+          open = !open;
+          if (open) {
+            body.style.maxHeight = bodyInner.offsetHeight + 24 + 'px';
+            header.querySelector('.chevron').innerHTML = '&#9660;';
+          } else {
+            body.style.maxHeight = '0';
+            header.querySelector('.chevron').innerHTML = '&#9654;';
+          }
+        });
+
+        card.appendChild(header);
+        card.appendChild(body);
+        container.appendChild(card);
+      });
+    }
+
+    // === INIT ===
+    initTimer();
+    initDaySelect();
+    initTimeSelect();
+    renderDay(daySelect.value);
+  </script>
+</body>
+</html>
